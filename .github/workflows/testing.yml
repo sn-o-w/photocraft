@@ -1,0 +1,61 @@
+name: Build Windows x64
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Branch to build (leave empty to use the selected branch)"
+        required: false
+        default: ""
+        type: string
+
+  push:
+    branches:
+      - "**"
+
+jobs:
+  build:
+    name: Compile Windows Executable
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch || github.ref }}
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: photocraft-windows-x64
+
+          cache-workspace-crates: true
+
+          cache-on-failure: true
+
+          save-if: ${{ github.ref_name == github.event.repository.default_branch }}
+
+      - name: Build PhotoCraft (Release)
+        run: cargo build --release -p photocraft -p photocraft-cli
+
+      - name: Prepare Distribution Folder
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path dist -Force
+          Copy-Item "target/release/photocraft.exe" -Destination "dist/"
+          Copy-Item "target/release/photocraft-cli.exe" -Destination "dist/"
+          if (Test-Path "packaging/windows/portable.txt") {
+            Copy-Item "packaging/windows/portable.txt" -Destination "dist/"
+
+          }
+
+      - name: Upload Windows Executables
+        uses: actions/upload-artifact@v4
+        with:
+          name: photocraft-windows-x64
+          path: dist/
